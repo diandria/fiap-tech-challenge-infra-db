@@ -26,3 +26,14 @@ variable "db_password" {
     error_message = "A senha precisa de ao menos 16 caracteres."
   }
 }
+
+variable "allowed_cidr_blocks" {
+  description = "Origens autorizadas na porta 5432. Sem valor, usa o CIDR da VPC default."
+  type        = list(string)
+  default     = null
+
+  validation {
+    condition     = var.allowed_cidr_blocks == null || !contains(coalesce(var.allowed_cidr_blocks, []), "0.0.0.0/0")
+    error_message = "Banco nao vai aberto para a internet. Restrinja a origem."
+  }
+}
