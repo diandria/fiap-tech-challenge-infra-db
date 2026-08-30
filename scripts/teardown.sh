@@ -4,7 +4,7 @@
 #
 #   ./scripts/teardown.sh                    destroy do Terraform + conferencia
 #   ./scripts/teardown.sh --sweep            remove tambem o que sobrou fora do estado
-#   ./scripts/teardown.sh --include-backend  remove tambem o bucket de estado e a tabela de trava
+#   ./scripts/teardown.sh --include-backend  remove tambem o bucket de estado
 #   ./scripts/teardown.sh --yes              nao pergunta (para uso em workflow)
 #
 # Por que existe o --sweep: se o estado se perder ou dessincronizar, o
@@ -13,9 +13,10 @@
 set -uo pipefail
 
 REGION="${AWS_REGION:-us-east-1}"
-BUCKET="${TF_STATE_BUCKET:-fiap-tech-challenge-tfstate}"
-LOCK_TABLE="${TF_LOCK_TABLE:-fiap-tech-challenge-tflock}"
 DB_IDENTIFIER="${DB_IDENTIFIER:-car-repair-shop-db}"
+# Nome do bucket resolvido depois da checagem de credencial: ele leva o ID da
+# conta como sufixo, porque o namespace de bucket do S3 e global.
+BUCKET="${TF_STATE_BUCKET:-}"
 
 SWEEP=false; INCLUDE_BACKEND=false; ASSUME_YES=false
 for arg in "$@"; do
@@ -23,7 +24,7 @@ for arg in "$@"; do
     --sweep)           SWEEP=true ;;
     --include-backend) INCLUDE_BACKEND=true ;;
     --yes|-y)          ASSUME_YES=true ;;
-    -h|--help)         sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)         awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
     *) echo "Opcao desconhecida: $arg"; exit 1 ;;
   esac
 done
@@ -35,6 +36,11 @@ fail() { echo "ERRO: $*" >&2; exit 1; }
 command -v aws >/dev/null 2>&1 || fail "aws CLI nao encontrado."
 aws sts get-caller-identity >/dev/null 2>&1 || fail \
   "Credencial AWS invalida ou expirada. No Learner Lab: Start Lab > AWS Details > AWS CLI > Show."
+
+if [ -z "$BUCKET" ]; then
+  ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+  BUCKET="fiap-tech-challenge-tfstate-${ACCOUNT_ID}"
+fi
 
 confirm() {
   $ASSUME_YES && return 0
@@ -107,25 +113,28 @@ if [ "$INCLUDE_BACKEND" = "true" ]; then
   echo
   echo "== 4. removendo o backend de estado =="
   echo "  Isto apaga o historico do estado. So faz sentido ao encerrar o projeto."
-  confirm "Apagar bucket $BUCKET e tabela $LOCK_TABLE? Digite 'sim':"
+  echo "  Bucket: $BUCKET"
+  confirm "Apagar o bucket $BUCKET? Digite 'sim':"
 
-  # Bucket versionado exige apagar todas as versoes antes.
-  aws s3api list-object-versions --bucket "$BUCKET" \
-    --query '{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json 2>/dev/null \
-    | python3 -c "
-import sys, json, subprocess
+  # Bucket versionado nao aceita remocao com versoes dentro, e a trava nativa
+  # deixa objetos .tflock que tambem contam. Apagar tudo em lotes primeiro.
+  for what in Versions DeleteMarkers; do
+    aws s3api list-object-versions --bucket "$BUCKET" \
+      --query "{Objects: ${what}[].{Key:Key,VersionId:VersionId}}" --output json 2>/dev/null \
+      | BUCKET="$BUCKET" python3 -c "
+import sys, json, subprocess, os
+bucket = os.environ['BUCKET']
 try: d = json.load(sys.stdin)
 except Exception: sys.exit(0)
 objs = (d or {}).get('Objects') or []
 for i in range(0, len(objs), 1000):
     batch = json.dumps({'Objects': objs[i:i+1000]})
-    subprocess.run(['aws','s3api','delete-objects','--bucket','$BUCKET','--delete',batch],
+    subprocess.run(['aws','s3api','delete-objects','--bucket',bucket,'--delete',batch],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 " 2>/dev/null
+  done
   aws s3api delete-bucket --bucket "$BUCKET" --region "$REGION" >/dev/null 2>&1 \
-    && echo "  bucket removido" || echo "  bucket nao removido (ja inexistente ou nao vazio)"
-  aws dynamodb delete-table --table-name "$LOCK_TABLE" --region "$REGION" >/dev/null 2>&1 \
-    && echo "  tabela removida" || echo "  tabela nao removida (ja inexistente)"
+    && echo "  bucket removido" || echo "  bucket nao removido (ja inexistente ou ainda com objetos)"
 fi
 
 echo
