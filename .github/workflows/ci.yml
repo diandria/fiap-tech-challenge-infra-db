@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  # Sem filtro de branch de destino: as tarefas deste milestone sao PRs
+  # empilhados, que apontam uns para os outros e nao direto para a main.
+  # Com o filtro, nenhum deles seria verificado.
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_VERSION: "1.15.6"
+  AWS_REGION: us-east-1
+
+jobs:
+  # Portao real: nao depende de credencial da AWS, entao continua valendo
+  # mesmo quando a chave temporaria do Learner Lab expira.
+  validate:
+    name: Formato, sintaxe e seguranca
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff
+
+      - name: terraform init
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        run: terraform validate
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.64.0
+
+      - name: tflint
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tflint --init
+          tflint --format compact
+
+      - name: trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+  # Depende da credencial temporaria do lab. Quando ela expira, este job falha
+  # e o de cima continua valendo: a revisao perde o plano, nao o portao.
+  plan:
+    name: Plano de mudanca
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Conferir credencial antes de tentar
+        id: creds
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: |
+          if aws sts get-caller-identity > /dev/null 2>&1; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Credencial da AWS ausente ou expirada. As do Learner Lab duram ~4h; rode ./scripts/refresh-aws-secrets.sh para renovar."
+          fi
+
+      - name: terraform init
+        if: steps.creds.outputs.ok == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+        run: terraform init -input=false
+
+      - name: terraform plan
+        id: plan
+        if: steps.creds.outputs.ok == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          TF_VAR_db_username: ${{ secrets.DB_USERNAME }}
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+        run: |
+          # Saida de TEXTO, nunca `terraform show -json`.
+          # O JSON traz `password` em claro, e este repositorio e publico:
+          # o comentario abaixo vai para uma pagina que qualquer um le.
+          terraform plan -input=false -no-color -lock=false > plan.txt 2>&1 || true
+          {
+            echo 'stdout<<PLANEOF'
+            tail -c 60000 plan.txt
+            echo 'PLANEOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comentar o plano no PR
+        if: steps.creds.outputs.ok == 'true'
+        uses: actions/github-script@v7
+        env:
+          PLAN: ${{ steps.plan.outputs.stdout }}
+        with:
+          script: |
+            const marker = '<!-- terraform-plan -->';
+            const body = `${marker}
+            ### Plano do Terraform
+
+            <details><summary>Ver o que vai mudar</summary>
+
+            \`\`\`hcl
+            ${process.env.PLAN}
+            \`\`\`
+
+            </details>`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
