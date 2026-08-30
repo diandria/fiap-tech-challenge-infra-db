@@ -39,7 +39,7 @@ resource "aws_security_group" "rds" {
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
-    cidr_blocks = local.ingress_cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # Egress irrestrito e inofensivo aqui: o RDS nao inicia conexoes de saida.
