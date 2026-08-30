@@ -49,3 +49,8 @@ resource "aws_db_instance" "main" {
   # nao ha trafego de producao real; em producao seria o contrario.
   apply_immediately = true
 }
+
+resource "aws_db_parameter_group" "gate_test" {
+     name =    "gate-test"
+  family="postgres16"
+}
