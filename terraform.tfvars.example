@@ -1,0 +1,4 @@
+# Copie para terraform.tfvars e troque os dois valores.
+# terraform.tfvars esta no .gitignore e nao deve ser commitado.
+db_username = "changeme"
+db_password = "changeme-generate-with-openssl-rand-base64-32"
