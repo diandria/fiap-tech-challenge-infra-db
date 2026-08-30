@@ -37,6 +37,12 @@ jobs:
       - name: terraform validate
         run: terraform validate
 
+      # O trivy nao cobre ingress aberto: verificado que ele reporta zero
+      # problemas para `ingress { cidr_blocks = ["0.0.0.0/0"] }` na porta 5432,
+      # enquanto acusa o egress equivalente. Esta verificacao fecha o buraco.
+      - name: Nenhum ingress aberto para a internet
+        run: python3 scripts/check-no-public-ingress.py
+
       - uses: terraform-linters/setup-tflint@v4
         with:
           tflint_version: v0.64.0
