@@ -1,0 +1,12 @@
+# O estado contem a senha do banco em texto claro e este repositorio e publico.
+# Este arquivo existe desde o primeiro commit por isso.
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+
+# Saidas de plan salvas em arquivo tambem carregam valores sensiveis.
+*.tfplan
+crash.log
