@@ -1,0 +1,94 @@
+name: Destroy
+
+# Só manual, e com confirmacao digitada. Nao e cerimonia: e o mecanismo de
+# controle de custo do ambiente efemero, e precisa ser dificil de disparar por
+# acidente e facil de disparar de proposito.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Digite "production" para confirmar a destruicao'
+        required: true
+        type: string
+      sweep:
+        description: "Remover tambem o que sobrar fora do estado do Terraform"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-apply
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: "1.15.6"
+  AWS_REGION: us-east-1
+
+jobs:
+  destroy:
+    name: Destruir infraestrutura
+    if: inputs.confirm == 'production'
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+      TF_VAR_db_username: ${{ secrets.DB_USERNAME }}
+      TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Conferir credencial
+        run: |
+          aws sts get-caller-identity > /dev/null 2>&1 || {
+            echo "::error::Credencial da AWS ausente ou expirada. Rode ./scripts/refresh-aws-secrets.sh"
+            exit 1
+          }
+
+      - name: terraform init
+        run: terraform init -input=false
+
+      - name: terraform destroy
+        run: terraform destroy -auto-approve -input=false -no-color
+
+      - name: Sweep do que sobrou fora do estado
+        if: inputs.sweep
+        run: ./scripts/teardown.sh --sweep --yes
+
+      # Destroy verde nao prova conta limpa: recurso criado fora do Terraform,
+      # ou orfao de um estado dessincronizado, continua cobrando.
+      - name: Confirmar que nada cobravel sobrou
+        run: |
+          leftover=0
+          rds=$(aws rds describe-db-instances --query 'DBInstances[].DBInstanceIdentifier' --output text)
+          ec2=$(aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" \
+                --query 'Reservations[].Instances[].InstanceId' --output text)
+          [ -n "$rds" ] && { echo "::warning::RDS ainda presente: $rds"; leftover=1; }
+          [ -n "$ec2" ] && { echo "::warning::EC2 ainda em execucao: $ec2"; leftover=1; }
+          {
+            echo "### Destruicao concluida"
+            echo ""
+            if [ "$leftover" = "0" ]; then
+              echo "Nada cobravel restante nesta regiao."
+            else
+              echo "**Sobrou recurso cobrando.** Rode este workflow de novo com \`sweep\` marcado."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$leftover" = "0" ]
+
+  recusado:
+    name: Confirmacao invalida
+    if: inputs.confirm != 'production'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::error::Confirmacao invalida. Digite exatamente 'production' para destruir."
+          exit 1
