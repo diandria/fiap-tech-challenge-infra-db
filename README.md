@@ -270,10 +270,18 @@ o JSON traz a senha em claro, e este repositório é público.
 | Repositório | Papel |
 |---|---|
 | [fiap-tech-challenge](https://github.com/diandria/fiap-tech-challenge) | a aplicação que consome este banco |
+| [fiap-tech-challenge-infra-k8s](https://github.com/diandria/fiap-tech-challenge-infra-k8s) | o cluster onde a aplicação roda; lê `db_security_group_id` daqui para liberar o acesso |
+| [fiap-tech-challenge-lambda](https://github.com/diandria/fiap-tech-challenge-lambda) | as functions; não acessam o banco, mas compartilham o armazenamento de parâmetros |
 
 A relação é direta: a aplicação lê `db_endpoint`, `db_port` e `db_name` deste estado para montar a
 string de conexão, e busca a senha no parâmetro SSM cujo nome sai em `db_password_parameter`. Sem
 este repositório aplicado, a aplicação não sobe.
 
-A documentação da API da aplicação — **Swagger** em `/api-docs` e a coleção do **Postman** em
+Este repositório também gera a **senha do administrador da aplicação**, em
+`admin_password_parameter` (`/car-repair-shop/app/admin-password`). O CD da aplicação a lê para
+semear o primeiro usuário. Sem esse parâmetro, o deploy falha na validação — e, antes de ela
+existir, a aplicação subia saudável, passava nas sondas e **não criava usuário nenhum**: ninguém
+conseguia autenticar, e o único sinal era um aviso no log que o deploy verde não mostrava.
+
+A documentação da API da aplicação — **Swagger** em `/docs` e a coleção do **Postman** em
 `postman/` — descreve os endpoints que, no fim, leem e escrevem nas tabelas deste banco.
