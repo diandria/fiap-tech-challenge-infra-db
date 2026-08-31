@@ -31,3 +31,8 @@ output "db_password_parameter" {
   description = "Nome do parametro SSM que guarda a senha. Nao e a senha."
   value       = aws_ssm_parameter.db_password.name
 }
+
+output "admin_password_parameter" {
+  description = "Nome do parametro SSM com a senha do admin da aplicacao."
+  value       = aws_ssm_parameter.admin_password.name
+}
