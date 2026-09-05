@@ -1,5 +1,5 @@
-# A VPC nao e criada aqui: este repositorio consome a default do Learner Lab.
-# A fronteira esta registrada no README.
+# The VPC is not created here: this repository consumes the Learner Lab
+# default. The boundary is documented in the README.
 data "aws_vpc" "default" {
   default = true
 }
@@ -12,18 +12,18 @@ data "aws_subnets" "default" {
 }
 
 locals {
-  # Sem valor explicito, a origem permitida e a propria VPC. Deixar o default
-  # amarrado ao CIDR descoberto evita que alguem herde um bloco largo por engano.
+  # With no explicit value the allowed source is the VPC itself. Tying the
+  # default to the discovered CIDR avoids inheriting a wider block by mistake.
   ingress_cidr_blocks = coalesce(var.allowed_cidr_blocks, [data.aws_vpc.default.cidr_block])
 }
 
-# O RDS exige subnet group com pelo menos duas AZs, mesmo sem Multi-AZ.
-# Verificado na conta: a VPC default tem 6 AZs.
+# RDS requires a subnet group spanning at least two AZs, even without
+# Multi-AZ. The default VPC in this account has 6.
 resource "aws_db_subnet_group" "main" {
   name       = local.db_identifier
   subnet_ids = data.aws_subnets.default.ids
 
-  description = "Subnets da VPC default usadas pelo RDS do car-repair-shop"
+  description = "Default VPC subnets used by the car-repair-shop RDS"
 }
 
 resource "aws_security_group" "rds" {
@@ -31,9 +31,9 @@ resource "aws_security_group" "rds" {
   description = "Acesso ao PostgreSQL do car-repair-shop, restrito a origem interna"
   vpc_id      = data.aws_vpc.default.id
 
-  # O ideal seria referenciar o security group dos nos do EKS, mas isso criaria
-  # dependencia circular entre infra-db e infra-k8s. Quebrada com uma variavel,
-  # cujo default e o CIDR da VPC: dentro da rede, nunca aberto para a internet.
+  # Referencing the EKS node security group would create a circular dependency
+  # between infra-db and infra-k8s. A variable breaks it; its default is the VPC
+  # CIDR, so access stays inside the network and never reaches the internet.
   ingress {
     description = "PostgreSQL a partir da rede interna"
     from_port   = 5432
@@ -42,11 +42,11 @@ resource "aws_security_group" "rds" {
     cidr_blocks = local.ingress_cidr_blocks
   }
 
-  # Egress irrestrito e inofensivo aqui: o RDS nao inicia conexoes de saida.
-  # Restringir nao aumenta a seguranca e quebra a resolucao de DNS interna.
+  # Unrestricted egress is harmless here: RDS does not open outbound
+  # connections. Restricting it adds no security and breaks internal DNS.
   #trivy:ignore:AVD-AWS-0104
   egress {
-    description = "Saida irrestrita; o RDS nao inicia conexoes"
+    description = "Unrestricted egress; RDS does not open connections"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"

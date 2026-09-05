@@ -1,17 +1,16 @@
 name: Destroy
 
-# Só manual, e com confirmacao digitada. Nao e cerimonia: e o mecanismo de
-# controle de custo do ambiente efemero, e precisa ser dificil de disparar por
-# acidente e facil de disparar de proposito.
+# Manual only, with a typed confirmation. This is the cost control for the
+# ephemeral environment: hard to trigger by accident, easy on purpose.
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Digite "production" para confirmar a destruicao'
+        description: 'Type "production" to confirm the destruction'
         required: true
         type: string
       sweep:
-        description: "Remover tambem o que sobrar fora do estado do Terraform"
+        description: "Also remove what is left outside the Terraform state"
         required: false
         type: boolean
         default: false
@@ -59,13 +58,13 @@ jobs:
       - name: terraform destroy
         run: terraform destroy -auto-approve -input=false -no-color
 
-      - name: Sweep do que sobrou fora do estado
+      - name: Sweep what is left outside the state
         if: inputs.sweep
         run: ./scripts/teardown.sh --sweep --yes
 
-      # Destroy verde nao prova conta limpa: recurso criado fora do Terraform,
-      # ou orfao de um estado dessincronizado, continua cobrando.
-      - name: Confirmar que nada cobravel sobrou
+      # A green destroy does not prove a clean account: resources created
+      # outside Terraform, or orphaned by a stale state, keep billing.
+      - name: Confirm nothing billable is left
         run: |
           leftover=0
           rds=$(aws rds describe-db-instances --query 'DBInstances[].DBInstanceIdentifier' --output text)
@@ -77,9 +76,9 @@ jobs:
             echo "### Destruicao concluida"
             echo ""
             if [ "$leftover" = "0" ]; then
-              echo "Nada cobravel restante nesta regiao."
+              echo "Nothing billable left in this region."
             else
-              echo "**Sobrou recurso cobrando.** Rode este workflow de novo com \`sweep\` marcado."
+              echo "**Billable resources remain.** Run this workflow again with \`sweep\` checked."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           [ "$leftover" = "0" ]
@@ -90,5 +89,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          echo "::error::Confirmacao invalida. Digite exatamente 'production' para destruir."
+          echo "::error::Invalid confirmation. Type exactly 'production' to destroy."
           exit 1

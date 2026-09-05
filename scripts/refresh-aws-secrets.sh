@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
 #
-# Copia a credencial local do Learner Lab para os secrets do GitHub Actions.
+# Copies the local Learner Lab credential into the GitHub Actions secrets.
 #
 #   ./scripts/refresh-aws-secrets.sh
 #
-# A credencial do Learner Lab expira em cerca de 4 horas, e o CI para de
-# conseguir rodar o plan quando isso acontece. Este script existe para que
-# renovar seja um comando, e nao tres edicoes manuais na interface do GitHub.
+# The Learner Lab credential expires in about 4 hours, and the CI stops being
+# able to run the plan when it does. This makes renewal one command instead of
+# three manual edits in the GitHub interface.
 #
-# Antes de rodar: Start Lab > AWS Details > AWS CLI > Show, e cole o bloco em
-# ~/.aws/credentials.
+# Before running: Start Lab > AWS Details > AWS CLI > Show, then paste the
+# block into ~/.aws/credentials.
 set -uo pipefail
 
 CRED_FILE="${AWS_SHARED_CREDENTIALS_FILE:-$HOME/.aws/credentials}"
 PROFILE="${AWS_PROFILE:-default}"
 
-fail() { echo "ERRO: $*" >&2; exit 1; }
+fail() { echo "ERROR: $*" >&2; exit 1; }
 
-command -v gh >/dev/null 2>&1 || fail "gh CLI nao encontrado."
-gh auth status >/dev/null 2>&1 || fail "gh nao autenticado. Rode: gh auth login"
-[ -f "$CRED_FILE" ] || fail "Arquivo de credencial nao encontrado em $CRED_FILE"
+command -v gh >/dev/null 2>&1 || fail "gh CLI not found."
+gh auth status >/dev/null 2>&1 || fail "gh is not authenticated. Run: gh auth login"
+[ -f "$CRED_FILE" ] || fail "Credential file not found at $CRED_FILE"
 
-# Le uma chave da secao do perfil, sem imprimir o valor.
+# Reads a key from the profile section without printing the value.
 read_key() {
   awk -v profile="[$PROFILE]" -v key="$1" '
     $0 == profile { inside = 1; next }
@@ -36,23 +36,23 @@ KEY_ID=$(read_key aws_access_key_id)
 SECRET=$(read_key aws_secret_access_key)
 TOKEN=$(read_key aws_session_token)
 
-[ -n "$KEY_ID" ] || fail "aws_access_key_id nao encontrado no perfil [$PROFILE]"
-[ -n "$SECRET" ]  || fail "aws_secret_access_key nao encontrado no perfil [$PROFILE]"
-[ -z "$TOKEN" ] && echo "Aviso: sem aws_session_token. Credencial do Learner Lab costuma ter um."
+[ -n "$KEY_ID" ] || fail "aws_access_key_id not found in profile [$PROFILE]"
+[ -n "$SECRET" ]  || fail "aws_secret_access_key not found in profile [$PROFILE]"
+[ -z "$TOKEN" ] && echo "Warning: no aws_session_token. Learner Lab credentials usually have one."
 
-echo "Validando a credencial antes de publicar..."
+echo "Validating the credential before publishing..."
 AWS_ACCESS_KEY_ID="$KEY_ID" AWS_SECRET_ACCESS_KEY="$SECRET" AWS_SESSION_TOKEN="$TOKEN" \
   aws sts get-caller-identity >/dev/null 2>&1 \
-  || fail "A credencial local nao autentica. Renove no Learner Lab antes de publicar."
+  || fail "The local credential does not authenticate. Renew it in the Learner Lab first."
 echo "  ok"
 
-echo "Publicando nos secrets do repositorio..."
+echo "Publishing to the repository secrets..."
 printf '%s' "$KEY_ID" | gh secret set AWS_ACCESS_KEY_ID     >/dev/null && echo "  AWS_ACCESS_KEY_ID"
 printf '%s' "$SECRET" | gh secret set AWS_SECRET_ACCESS_KEY >/dev/null && echo "  AWS_SECRET_ACCESS_KEY"
 printf '%s' "$TOKEN"  | gh secret set AWS_SESSION_TOKEN     >/dev/null && echo "  AWS_SESSION_TOKEN"
 
-# As credenciais do banco vem do tfvars local, se existir. Elas nao expiram,
-# entao so precisam ser publicadas uma vez.
+# Database credentials come from the local tfvars, if present. They do not
+# expire, so they only need publishing once.
 if [ -f terraform.tfvars ]; then
   USER_V=$(grep -E '^\s*db_username' terraform.tfvars | cut -d'"' -f2)
   PASS_V=$(grep -E '^\s*db_password' terraform.tfvars | cut -d'"' -f2)
@@ -63,4 +63,4 @@ if [ -f terraform.tfvars ]; then
 fi
 
 echo
-echo "Pronto. Os secrets valem enquanto a sessao do lab durar (cerca de 4h)."
+echo "Done. The secrets last as long as the lab session (about 4h)."

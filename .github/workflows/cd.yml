@@ -8,8 +8,8 @@ on:
 permissions:
   contents: read
 
-# Dois applies simultaneos corrompem o estado. A trava do S3 barraria o
-# segundo, mas com erro; esta fila resolve antes de chegar la.
+# Two concurrent applies corrupt the state. The S3 lock would block the second
+# one, but with an error; this queue resolves it before that.
 concurrency:
   group: terraform-apply
   cancel-in-progress: false
@@ -49,9 +49,9 @@ jobs:
       - name: terraform apply
         run: terraform apply -auto-approve -input=false -no-color
 
-      # Apply verde com recurso em estado invalido e falso positivo: o apply
-      # responde "criei", nao "esta funcionando".
-      - name: Verificar que a instancia esta disponivel
+      # A green apply with a resource in an invalid state is a false positive:
+      # apply reports "created", not "working".
+      - name: Verify the instance is available
         run: |
           status=$(aws rds describe-db-instances \
             --db-instance-identifier car-repair-shop-db \
@@ -59,26 +59,26 @@ jobs:
           echo "status=$status"
           [ "$status" = "available" ] || { echo "::error::RDS em $status, esperado available"; exit 1; }
 
-      - name: Verificar que o banco nao esta exposto na internet
+      - name: Verify the database is not internet-facing
         run: |
           public=$(aws rds describe-db-instances \
             --db-instance-identifier car-repair-shop-db \
             --query 'DBInstances[0].PubliclyAccessible' --output text)
-          [ "$public" = "False" ] || { echo "::error::RDS marcado como publicamente acessivel"; exit 1; }
+          [ "$public" = "False" ] || { echo "::error::RDS is marked as publicly accessible"; exit 1; }
           echo "publicly_accessible=$public"
 
-      - name: Resumo
+      - name: Summary
         run: |
           {
-            echo "### Infraestrutura aplicada"
+            echo "### Infrastructure applied"
             echo ""
-            echo "| Item | Valor |"
+            echo "| Item | Value |"
             echo "|---|---|"
             echo "| Endpoint | \`$(terraform output -raw db_endpoint)\` |"
-            echo "| Porta | $(terraform output -raw db_port) |"
-            echo "| Banco | $(terraform output -raw db_name) |"
-            echo "| Senha em | \`$(terraform output -raw db_password_parameter)\` |"
+            echo "| Port | $(terraform output -raw db_port) |"
+            echo "| Database | $(terraform output -raw db_name) |"
+            echo "| Password at | \`$(terraform output -raw db_password_parameter)\` |"
             echo ""
-            echo "Custo aproximado enquanto estiver de pe: **USD 0,43/dia**."
-            echo "Para derrubar: workflow **Destroy**, ou \`./scripts/teardown.sh\`."
+            echo "Approximate cost while up: **USD 0.43/day**."
+            echo "To tear down: the **Destroy** workflow, or \`./scripts/teardown.sh\`."
           } >> "$GITHUB_STEP_SUMMARY"
