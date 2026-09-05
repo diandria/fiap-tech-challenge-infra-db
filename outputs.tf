@@ -1,8 +1,8 @@
-# Consumidos por infra-k8s (M5), pela lambda (M6) e pela aplicacao (M8),
-# via terraform_remote_state apontando para o backend deste repositorio.
+# Consumed by infra-k8s, the lambda repository and the application, through
+# terraform_remote_state pointing at this repository's backend.
 
 output "db_endpoint" {
-  description = "Endereco DNS do RDS. Resolve para IP privado da VPC."
+  description = "RDS DNS address. Resolves to a private VPC address."
   value       = aws_db_instance.main.address
 }
 
@@ -23,16 +23,16 @@ output "db_username" {
 }
 
 output "db_security_group_id" {
-  description = "Security group do RDS. O infra-k8s referencia para liberar os nos."
+  description = "RDS security group. infra-k8s references it to allow the nodes."
   value       = aws_security_group.rds.id
 }
 
 output "db_password_parameter" {
-  description = "Nome do parametro SSM que guarda a senha. Nao e a senha."
+  description = "Name of the SSM parameter holding the password. Not the password."
   value       = aws_ssm_parameter.db_password.name
 }
 
 output "admin_password_parameter" {
-  description = "Nome do parametro SSM com a senha do admin da aplicacao."
+  description = "Name of the SSM parameter holding the application admin password."
   value       = aws_ssm_parameter.admin_password.name
 }

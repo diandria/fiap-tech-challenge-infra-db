@@ -4,13 +4,13 @@ terraform {
     key    = "infra-db/terraform.tfstate"
     region = "us-east-1"
 
-    # Cifra em repouso. O estado guarda a senha do banco em texto claro:
-    # esta linha e o .gitignore sao o que impede o vazamento.
+    # Encryption at rest. The state holds the database password in clear text;
+    # this line and .gitignore are what keep it from leaking.
     encrypt = true
 
-    # Trava nativa do S3, via arquivo .tflock ao lado do estado. Substitui o
-    # dynamodb_table, que o Terraform deprecou a partir da versao 1.11: uma
-    # tabela a menos para criar, pagar e lembrar de destruir.
+    # Native S3 locking, via a .tflock file next to the state. Replaces
+    # dynamodb_table, deprecated since Terraform 1.11: one less table to
+    # create, pay for and remember to destroy.
     use_lockfile = true
   }
 }

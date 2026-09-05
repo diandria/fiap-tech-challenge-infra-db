@@ -4,8 +4,8 @@ resource "aws_db_parameter_group" "main" {
 
   description = "Parametros do PostgreSQL do car-repair-shop"
 
-  # Query acima de 1s vai para o log. Coerente com o pilar de observabilidade
-  # da fase: consulta lenta some no agregado de latencia HTTP, mas aparece aqui.
+  # Queries over 1s go to the log. A slow query disappears into the aggregate
+  # HTTP latency but shows up here.
   parameter {
     name  = "log_min_duration_statement"
     value = "1000"
@@ -34,18 +34,17 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   parameter_group_name   = aws_db_parameter_group.main.name
 
-  # Sem endereco publico: o acesso vem de dentro da VPC, pelo security group.
+  # No public address: access comes from inside the VPC, via the security group.
   publicly_accessible = false
 
-  # As tres linhas abaixo sao escolhas deliberadas de ambiente efemero, onde o
-  # destroy precisa ser limpo e rapido para nao queimar o orcamento do lab.
-  # Em ambiente real as tres seriam o oposto: snapshot final obrigatorio,
-  # protecao contra delecao ligada e retencao de backup de varios dias.
+  # The three settings below suit an ephemeral environment, where destroy has
+  # to be clean and fast. A real environment would invert all three: mandatory
+  # final snapshot, deletion protection on, and multi-day backup retention.
   skip_final_snapshot     = true
   deletion_protection     = false
   backup_retention_period = 0
 
-  # Mudanca de parametro nao espera a janela de manutencao. Aceitavel porque
-  # nao ha trafego de producao real; em producao seria o contrario.
+  # Parameter changes skip the maintenance window. Acceptable without real
+  # production traffic; in production it would be the opposite.
   apply_immediately = true
 }
