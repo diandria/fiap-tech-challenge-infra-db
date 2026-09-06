@@ -1,6 +1,9 @@
 resource "aws_db_parameter_group" "main" {
-  name   = local.db_identifier
-  family = "postgres16"
+  # name_prefix, not name: description and family are immutable, so any change
+  # to them replaces the group. With a fixed name the replacement collides with
+  # the group still attached to the running instance (DBParameterGroupAlreadyExists).
+  name_prefix = "${local.db_identifier}-"
+  family      = "postgres16"
 
   description = "PostgreSQL parameters for car-repair-shop"
 

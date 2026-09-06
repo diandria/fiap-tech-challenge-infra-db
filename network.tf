@@ -27,9 +27,17 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_security_group" "rds" {
-  name        = local.db_identifier
+  # name_prefix and create_before_destroy: description is immutable and forces
+  # replacement. The new group must exist before the instance moves to it, and
+  # the old one can only go after that -- the Learner Lab denies detaching the
+  # RDS ENI by force, which is what deleting an in-use group falls back to.
+  name_prefix = "${local.db_identifier}-"
   description = "Access to the car-repair-shop PostgreSQL, restricted to internal sources"
   vpc_id      = data.aws_vpc.default.id
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   # Referencing the EKS node security group would create a circular dependency
   # between infra-db and infra-k8s. A variable breaks it; its default is the VPC
