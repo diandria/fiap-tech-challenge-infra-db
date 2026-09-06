@@ -1,5 +1,5 @@
 variable "aws_region" {
-  description = "Regiao AWS. O Learner Lab so libera us-east-1."
+  description = "AWS region. The Learner Lab only allows us-east-1."
   type        = string
   default     = "us-east-1"
 }
@@ -11,7 +11,7 @@ variable "environment" {
 }
 
 variable "db_username" {
-  description = "Usuario administrador do PostgreSQL."
+  description = "PostgreSQL administrator user."
   type        = string
   sensitive   = true
 }

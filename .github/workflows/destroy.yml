@@ -28,7 +28,7 @@ env:
 
 jobs:
   destroy:
-    name: Destruir infraestrutura
+    name: Destroy infrastructure
     if: inputs.confirm == 'production'
     runs-on: ubuntu-latest
     env:
@@ -45,10 +45,10 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      - name: Conferir credencial
+      - name: Verify credentials
         run: |
           aws sts get-caller-identity > /dev/null 2>&1 || {
-            echo "::error::Credencial da AWS ausente ou expirada. Rode ./scripts/refresh-aws-secrets.sh"
+            echo "::error::AWS credentials missing or expired. Run ./scripts/refresh-aws-secrets.sh"
             exit 1
           }
 
@@ -84,7 +84,7 @@ jobs:
           [ "$leftover" = "0" ]
 
   recusado:
-    name: Confirmacao invalida
+    name: Invalid confirmation
     if: inputs.confirm != 'production'
     runs-on: ubuntu-latest
     steps:
