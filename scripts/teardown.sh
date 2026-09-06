@@ -71,7 +71,7 @@ else
 fi
 
 sg=$(aws ec2 describe-security-groups --region "$REGION" \
-  --filters "Name=group-name,Values=${DB_IDENTIFIER}" \
+  --filters "Name=group-name,Values=${DB_IDENTIFIER}*" \
   --query 'SecurityGroups[].GroupId' --output text 2>/dev/null)
 [ -n "$sg" ] && { echo "  Security group still present: $sg"; leftover=1; } || echo "  Security group: clean"
 
