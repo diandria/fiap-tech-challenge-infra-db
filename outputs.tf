@@ -7,17 +7,17 @@ output "db_endpoint" {
 }
 
 output "db_port" {
-  description = "Porta do PostgreSQL."
+  description = "PostgreSQL port."
   value       = aws_db_instance.main.port
 }
 
 output "db_name" {
-  description = "Nome do banco criado na instancia."
+  description = "Name of the database created on the instance."
   value       = aws_db_instance.main.db_name
 }
 
 output "db_username" {
-  description = "Usuario administrador."
+  description = "Administrator user."
   value       = aws_db_instance.main.username
   sensitive   = true
 }

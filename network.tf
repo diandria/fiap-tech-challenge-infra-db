@@ -28,14 +28,14 @@ resource "aws_db_subnet_group" "main" {
 
 resource "aws_security_group" "rds" {
   name        = local.db_identifier
-  description = "Acesso ao PostgreSQL do car-repair-shop, restrito a origem interna"
+  description = "Access to the car-repair-shop PostgreSQL, restricted to internal sources"
   vpc_id      = data.aws_vpc.default.id
 
   # Referencing the EKS node security group would create a circular dependency
   # between infra-db and infra-k8s. A variable breaks it; its default is the VPC
   # CIDR, so access stays inside the network and never reaches the internet.
   ingress {
-    description = "PostgreSQL a partir da rede interna"
+    description = "PostgreSQL from the internal network"
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"

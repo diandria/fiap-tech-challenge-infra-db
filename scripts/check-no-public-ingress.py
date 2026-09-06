@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Recusa qualquer bloco de ingress aberto para a internet.
+Rejects any ingress block open to the internet.
 
-Existe porque o trivy nao cobre este caso. Verificado empiricamente: com
-`ingress { cidr_blocks = ["0.0.0.0/0"] }` na porta 5432, o trivy reporta zero
-problemas em todas as severidades, enquanto acusa o egress equivalente.
+It exists because trivy does not cover this case. Verified empirically: with
+`ingress { cidr_blocks = ["0.0.0.0/0"] }` on port 5432, trivy reports zero
+findings at every severity while flagging the equivalent egress.
 
-A validacao da variavel `allowed_cidr_blocks` cobre quem passa o valor por
-variavel; esta verificacao cobre quem escreve direto no .tf.
+The `allowed_cidr_blocks` variable validation covers values passed by variable;
+this check covers values written straight into the .tf.
 """
 import re
 import sys
@@ -17,7 +17,7 @@ OPEN_CIDRS = ("0.0.0.0/0", "::/0")
 
 
 def ingress_blocks(text: str):
-    """Devolve (linha_inicial, corpo) de cada bloco ingress, casando chaves."""
+    """Returns (start_line, body) for each ingress block, matching braces."""
     for match in re.finditer(r"\bingress\s*\{", text):
         start = match.end()
         depth = 1
@@ -44,14 +44,14 @@ def main() -> int:
                     findings.append((path, line, cidr))
 
     if not findings:
-        print("ok: nenhum ingress aberto para a internet")
+        print("ok: no ingress open to the internet")
         return 0
 
     for path, line, cidr in findings:
-        print(f"{path}:{line}: ingress aberto para {cidr}", file=sys.stderr)
+        print(f"{path}:{line}: ingress open to {cidr}", file=sys.stderr)
     print(
-        f"\n{len(findings)} bloco(s) de ingress aberto(s). "
-        "Restrinja a origem antes de seguir.",
+        f"\n{len(findings)} open ingress block(s). "
+        "Restrict the source before continuing.",
         file=sys.stderr,
     )
     return 1

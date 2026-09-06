@@ -2,7 +2,7 @@ resource "aws_db_parameter_group" "main" {
   name   = local.db_identifier
   family = "postgres16"
 
-  description = "Parametros do PostgreSQL do car-repair-shop"
+  description = "PostgreSQL parameters for car-repair-shop"
 
   # Queries over 1s go to the log. A slow query disappears into the aggregate
   # HTTP latency but shows up here.
